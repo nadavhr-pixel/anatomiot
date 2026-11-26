@@ -1,7 +1,7 @@
 // אנטומיות ושות׳ – offline support for the home-screen app.
 // Pages: network first (always the newest version when online), the last copy when offline.
 // 3D packs: their file names carry a content hash, so a cached copy never goes stale – served from the cache.
-const BUILD = '1795700500', PAGE = 'anat-page', PACKS = 'anat-packs';
+const BUILD = '1795704736', PAGE = 'anat-page', PACKS = 'anat-packs';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(PAGE).then(c => c.addAll(['./', './manifest.webmanifest', './icon-192.png', './icon-512.png'])).catch(() => { }));
   self.skipWaiting();
