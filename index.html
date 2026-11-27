@@ -18265,6 +18265,306 @@
         fill(); try { if (window.visGrpPaint) window.visGrpPaint(); } catch (e) { }
       }, 0));
     })();
+    // ===================== v4.23: "build the limb" – contract a muscle / movement mode / movement quiz =====================
+    // Real 3D motion: the bones of the girdle, arm and forearm turn about their joints; every built muscle is skinned
+    // between its origin bone and its insertion bone, so it shortens or stretches with the movement.
+    // Colours (only for the muscles that are built): agonist = yellow, synergist = dark yellow, antagonist = blue, stabilizer = green.
+    (function () {
+      if (!window.ULBuild || !window.SHM_TABLE || !window.THREE) return;
+      const UB = window.ULBuild, B = UB.B, T = window.SHM_TABLE;
+      const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+      // joint centres / axes in the model frame (mm; x – = lateral of the right limb, y – = anterior, z = up)
+      const SC = V([-14, -28, 1396]), AC = V([-150, 35, 1418]), GH = V([-158, 26, 1380]), EL = V([-218, 33, 1106]);
+      const RH = V([-238, 30, 1086]), UH = V([-246, -14, 866]);
+      const EAX = V([65, -7, -6]).normalize(), FAX = RH.clone().sub(UH).normalize(), HAX = GH.clone().sub(EL).normalize();
+      const X = V([1, 0, 0]), Y = V([0, 1, 0]), Z = V([0, 0, 1]);
+      const COL = { A: [1.0, 0.86, 0.12], S: [0.72, 0.52, 0.04], X: [0.22, 0.48, 0.98], T: [0.20, 0.78, 0.42], N: [0.55, 0.42, 0.40] };
+      const ROLE = { A: 'אגוניסט (Agonist)', S: 'סינרגיסט (Synergist)', X: 'אנטגוניסט (Antagonist)', T: 'מייצב (Stabilizer)' };
+      const MUSC = [0.80, 0.37, 0.33], SELC = [0.99, 0.70, 0.12];
+      // segment of every bone mesh
+      const SEGB = { l_clavR: 'C', l_scapula: 'P', l_humerus: 'H', mu_ulna: 'F', mu_radius: 'R' };
+      // origin segment → insertion segment of every muscle (T = trunk, static)
+      const MS = { subs: 'PH', supra: 'PH', infra: 'PH', tmin: 'PH', coraco: 'PH', bicS: 'PR', bicL: 'PR', brach: 'HF', triL: 'PF', triLat: 'HF', triM: 'HF', anc: 'HF',
+        dC: 'CH', dA: 'PH', dS: 'PH', pC: 'CH', pS: 'TH', pA: 'TH', subcl: 'TC', pmin: 'TP', serr: 'TP', trD: 'TC', trT: 'TP', trA: 'TP', lev: 'TP', rhMin: 'TP', rhMaj: 'TP', lat: 'TH', tmaj: 'PH' };
+      const CUFF = ['subs', 'supra', 'infra', 'tmin'];
+      // movements: joint, plane / axis, start and end pose, roles (from the actions taught for each muscle)
+      const GHJ = 'מפרק הכתף (Glenohumeral)', ELJ = 'מפרק המרפק (Humeroulnar)', RUJ = 'מפרקי ה־Radioulnar', STJ = 'השכמה על בית החזה (Scapulothoracic)';
+      const MOVES = [
+        { id: 'shFlex', as: 'P', cam: 'lat', he: 'פלקסיה של הכתף', j: GHJ, g: 'כתף', plane: 'סגיטלי', axis: 'פרונטלי (מדיאו־לטרלי)', ax: [GH, X], s: {}, e: { fl: 100 },
+          d: 'הזרוע נעה קדימה ולמעלה.', A: ['dC', 'pC'], S: ['coraco', 'bicL', 'pS'], X: ['dS', 'lat', 'tmaj', 'triL'], T: CUFF },
+        { id: 'shExt', as: 'P', cam: 'lat', he: 'אקסטנציה של הכתף', j: GHJ, g: 'כתף', plane: 'סגיטלי', axis: 'פרונטלי (מדיאו־לטרלי)', ax: [GH, X], s: { fl: 60 }, e: { fl: -40 },
+          d: 'הזרוע נעה אחורה (מפלקסיה ועד מאחורי הגו).', A: ['dS', 'lat', 'tmaj'], S: ['triL'], X: ['dC', 'pC', 'coraco', 'bicL'], T: CUFF },
+        { id: 'shAbd', as: 'P', cam: 'ant', he: 'אבדוקציה של הכתף', j: GHJ, g: 'כתף', plane: 'פרונטלי', axis: 'סגיטלי (קדמי־אחורי)', ax: [GH, Y], s: {}, e: { ab: 85 },
+          d: 'הזרוע מתרחקת מהגו הצידה. ה־Supraspinatus מתחיל את התנועה, והחלק האקרומיאלי של הדלטואיד ממשיך אותה.', A: ['dA', 'supra'], S: ['trD', 'serr'], X: ['pC', 'pS', 'pA', 'lat', 'tmaj', 'coraco'], T: ['subs', 'infra', 'tmin'] },
+        { id: 'shAdd', as: 'P', cam: 'ant', he: 'אדוקציה של הכתף', j: GHJ, g: 'כתף', plane: 'פרונטלי', axis: 'סגיטלי (קדמי־אחורי)', ax: [GH, Y], s: { ab: 75 }, e: { ab: 0 },
+          d: 'הזרוע מתקרבת חזרה אל הגו.', A: ['pC', 'pS', 'pA', 'lat', 'tmaj'], S: ['coraco', 'triL', 'tmin', 'dC', 'dS'], X: ['dA', 'supra'], T: ['subs', 'infra'] },
+        { id: 'shIR', as: 'P', cam: 'rot', he: 'רוטציה פנימית של הכתף', j: GHJ, g: 'כתף', plane: 'טרנסוורסלי', axis: 'אורכי (לאורך ההומרוס)', ax: [GH, HAX], s: { eb: 90 }, e: { eb: 90, ro: 65 },
+          d: 'ההומרוס מסתובב סביב הציר האורכי שלו פנימה. המרפק כפוף ל־90° כדי שיהיה קל לראות: האמה נעה לכיוון הבטן.', A: ['subs'], S: ['pC', 'pS', 'pA', 'lat', 'tmaj', 'dC', 'coraco'], X: ['infra', 'tmin', 'dS'], T: ['supra'] },
+        { id: 'shER', as: 'P', cam: 'rot', he: 'רוטציה חיצונית של הכתף', j: GHJ, g: 'כתף', plane: 'טרנסוורסלי', axis: 'אורכי (לאורך ההומרוס)', ax: [GH, HAX], s: { eb: 90 }, e: { eb: 90, ro: -55 },
+          d: 'ההומרוס מסתובב סביב הציר האורכי שלו החוצה. המרפק כפוף ל־90°: האמה נעה הצידה.', A: ['infra', 'tmin'], S: ['dS'], X: ['subs', 'pC', 'pS', 'pA', 'lat', 'tmaj', 'dC'], T: ['supra'] },
+        { id: 'elFlex', as: 'H', cam: 'lat', he: 'פלקסיה של המרפק', j: ELJ, g: 'מרפק ואמה', plane: 'סגיטלי', axis: 'פרונטלי (דרך האפיקונדילים)', ax: [EL, EAX], s: {}, e: { eb: 130 },
+          d: 'האמה מתקרבת לזרוע מלפנים.', A: ['brach', 'bicS', 'bicL'], S: [], X: ['triL', 'triLat', 'triM', 'anc'], T: [] },
+        { id: 'elExt', as: 'H', cam: 'lat', he: 'אקסטנציה של המרפק', j: ELJ, g: 'מרפק ואמה', plane: 'סגיטלי', axis: 'פרונטלי (דרך האפיקונדילים)', ax: [EL, EAX], s: { eb: 120 }, e: { eb: 0 },
+          d: 'האמה מתרחקת מהזרוע ומתיישרת.', A: ['triL', 'triLat', 'triM'], S: ['anc'], X: ['brach', 'bicS', 'bicL'], T: [] },
+        { id: 'sup', as: 'F', cam: 'fa', he: 'סופינציה של האמה', j: RUJ, g: 'מרפק ואמה', plane: 'טרנסוורסלי', axis: 'אורכי (מראש הרדיוס לראש האולנה)', ax: [RH, FAX], s: { eb: 90, pn: 85 }, e: { eb: 90, pn: 0 },
+          d: 'הרדיוס מסתובב סביב האולנה וכף היד פונה למעלה. התנועה מתחילה ממנח של פרונציה, והמרפק כפוף ל־90° (כך הביספס הוא סופינטור חזק).', A: ['bicS', 'bicL'], S: [], X: [], T: [],
+          note: 'הסופינטור והפרונטורים של האמה לא נמצאים בדגם.' },
+        { id: 'scElev', as: 'T', cam: 'post', he: 'אלבציה של השכמה', j: STJ, g: 'שכמה', plane: 'פרונטלי', axis: 'סגיטלי (דרך מפרק ה־SC)', ax: [SC, Y], s: {}, e: { el: 11 },
+          d: 'השכמה עולה למעלה (הרמת כתפיים).', A: ['trD', 'lev'], S: ['rhMin', 'rhMaj'], X: ['pmin', 'trA', 'subcl'], T: [] },
+        { id: 'scDep', as: 'T', cam: 'post', he: 'דפרסיה של השכמה', j: STJ, g: 'שכמה', plane: 'פרונטלי', axis: 'סגיטלי (דרך מפרק ה־SC)', ax: [SC, Y], s: { el: 8 }, e: { el: -6 },
+          d: 'השכמה יורדת למטה.', A: ['pmin', 'trA'], S: ['subcl'], X: ['trD', 'lev'], T: [] },
+        { id: 'scRet', as: 'T', cam: 'top', he: 'רטרקציה של השכמה', j: STJ, g: 'שכמה', plane: 'טרנסוורסלי', axis: 'אורכי (דרך מפרק ה־SC)', ax: [SC, Z], s: {}, e: { pr: -12 },
+          d: 'השכמה נמשכת מדיאלית, לכיוון עמוד השדרה.', A: ['trT', 'rhMin', 'rhMaj'], S: ['trD', 'trA', 'lev'], X: ['serr', 'pmin'], T: [] },
+        { id: 'scPro', as: 'T', cam: 'top', he: 'פרוטרקציה של השכמה', j: STJ, g: 'שכמה', plane: 'טרנסוורסלי', axis: 'אורכי (דרך מפרק ה־SC)', ax: [SC, Z], s: {}, e: { pr: 16 },
+          d: 'השכמה נמשכת קדימה ולטרלית סביב בית החזה.', A: ['serr'], S: ['pmin'], X: ['trT', 'rhMin', 'rhMaj'], T: [] },
+        { id: 'scUp', as: 'T', cam: 'post', he: 'רוטציה כלפי מעלה של השכמה', j: STJ, g: 'שכמה', plane: 'פרונטלי', axis: 'סגיטלי (דרך השכמה)', ax: [AC, Y], s: {}, e: { ur: 24 },
+          d: 'ה־Inferior angle זז לטרלית וה־Glenoid פונה כלפי מעלה (חלק מהרמת היד מעל הראש).', A: ['trD', 'serr'], S: ['trA'], X: ['lev', 'rhMin', 'rhMaj', 'pmin'], T: [] },
+        { id: 'scDown', as: 'T', cam: 'post', he: 'רוטציה כלפי מטה של השכמה', j: STJ, g: 'שכמה', plane: 'פרונטלי', axis: 'סגיטלי (דרך השכמה)', ax: [AC, Y], s: { ur: 22 }, e: { ur: -4 },
+          d: 'ה־Inferior angle זז מדיאלית וה־Glenoid פונה כלפי מטה.', A: ['lev', 'rhMin', 'rhMaj', 'pmin'], S: [], X: ['trD', 'serr', 'trA'], T: [] }
+      ];
+      const MV = {}; MOVES.forEach(m => MV[m.id] = m);
+      const roleOf = (m, k) => ['A', 'S', 'X', 'T'].find(r => (m[r] || []).includes(k)) || null;
+      const name = (k) => (T.byKey[k] || [])[5] || k;
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+      // ---------------- pose → segment matrices
+      const rot = (p, axis, deg) => { const m = new THREE.Matrix4().makeRotationAxis(axis, deg * Math.PI / 180); const t = new THREE.Matrix4().makeTranslation(p.x, p.y, p.z), ti = new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z); return t.multiply(m).multiply(ti); };
+      function mats(q) {
+        q = Object.assign({ el: 0, pr: 0, ur: 0, fl: 0, ab: 0, ro: 0, eb: 0, pn: 0 }, q);
+        const C = rot(SC, Y, q.el).multiply(rot(SC, Z, q.pr));
+        const P = C.clone().multiply(rot(AC, Y, q.ur));
+        const H = P.clone().multiply(rot(GH, X, -q.fl)).multiply(rot(GH, Y, q.ab)).multiply(rot(GH, HAX, q.ro));
+        const F = H.clone().multiply(rot(EL, EAX, -q.eb));
+        const R = F.clone().multiply(rot(RH, FAX, q.pn));
+        return { T: new THREE.Matrix4(), C, P, H, F, R };
+      }
+      const lerpPose = (a, b, k) => { const o = {}; new Set([...Object.keys(a), ...Object.keys(b)]).forEach(n => o[n] = (a[n] || 0) + ((b[n] || 0) - (a[n] || 0)) * k); return o; };
+
+      // ---------------- skinning data per muscle object
+      const SK = {};
+      async function anchors(k) {
+        const r = T.byKey[k]; if (!r) return null;
+        const c = async (mesh) => { try { const g = await Mini3D.geo(mesh); if (!g) return null; const v = new THREE.Vector3(); g.boundingBox.getCenter(v); return v; } catch (e) { return null; } };
+        const o = await c(r[2]), i = await c(r[3]);
+        return o && i ? [o, i] : null;
+      }
+      async function prep(id, k) {
+        const S = B.S; const obj = S && S.get(id); if (!obj) return null;
+        if (SK[id] && SK[id].obj === obj) return SK[id];
+        const an = await anchors(k); if (!an) return null;
+        const g = obj.geometry.clone(); obj.geometry = g;
+        const pos = g.attributes.position.array, rest = new Float32Array(pos), n = pos.length / 3, w = new Float32Array(n);
+        const [O, I] = an, d = I.clone().sub(O), L2 = d.lengthSq();
+        for (let i = 0; i < n; i++) {
+          const t = ((rest[i * 3] - O.x) * d.x + (rest[i * 3 + 1] - O.y) * d.y + (rest[i * 3 + 2] - O.z) * d.z) / L2;
+          const u = Math.max(0, Math.min(1, (t - 0.12) / 0.76)); w[i] = u * u * (3 - 2 * u);
+        }
+        const segs = MS[k] || 'TT';
+        return (SK[id] = { obj, rest, w, o: segs[0], i: segs[1] });
+      }
+      function applyPose(q) {
+        const S = B.S; if (!S) return; const M = mats(q);
+        Object.entries(S.objs).forEach(([id, obj]) => {
+          const seg = SEGB[obj.userData.mesh] || (/^ul_(scaph|lun|triq|pisi|trpm|trpd|cap|ham|mc|pp|mp|dp)/.test(obj.userData.mesh) ? 'R' : null);
+          if (seg) { obj.matrixAutoUpdate = false; obj.matrix.copy(M[seg]); obj.matrixWorldNeedsUpdate = true; }
+        });
+        Object.values(SK).forEach(sk => {
+          if (!sk.obj.parent) return;
+          const a = M[sk.o].elements, b = M[sk.i].elements, r = sk.rest, w = sk.w, p = sk.obj.geometry.attributes.position.array;
+          for (let i = 0, n = w.length; i < n; i++) {
+            const x = r[i * 3], y = r[i * 3 + 1], z = r[i * 3 + 2], u = w[i], v = 1 - u;
+            const ax = a[0] * x + a[4] * y + a[8] * z + a[12], ay = a[1] * x + a[5] * y + a[9] * z + a[13], az = a[2] * x + a[6] * y + a[10] * z + a[14];
+            const bx = b[0] * x + b[4] * y + b[8] * z + b[12], by = b[1] * x + b[5] * y + b[9] * z + b[13], bz = b[2] * x + b[6] * y + b[10] * z + b[14];
+            p[i * 3] = ax * v + bx * u; p[i * 3 + 1] = ay * v + by * u; p[i * 3 + 2] = az * v + bz * u;
+          }
+          sk.obj.geometry.attributes.position.needsUpdate = true;
+        });
+        S.kick();
+      }
+      function finishGeo() { Object.values(SK).forEach(sk => { try { sk.obj.geometry.computeVertexNormals(); sk.obj.geometry.computeBoundingSphere(); sk.obj.geometry.computeBoundingBox(); } catch (e) { } }); }
+
+      const CAMS = { lat: { target: [-150, 20, 1230], dist: 900, yaw: -Math.PI / 2, pitch: 0.08 }, ant: { target: [-150, 20, 1250], dist: 950, yaw: 0, pitch: 0.06 },
+        post: { target: [-110, 40, 1320], dist: 760, yaw: Math.PI, pitch: 0.12 }, top: { target: [-100, 30, 1360], dist: 760, yaw: Math.PI, pitch: 0.95 },
+        rot: { target: [-200, -80, 1150], dist: 760, yaw: -0.25, pitch: 0.75 }, fa: { target: [-230, -170, 1105], dist: 520, yaw: -0.7, pitch: 0.45 } };
+      // ---------------- axis + plane helpers
+      let helper = null;
+      function showAxis(m) {
+        hideAxis(); const S = B.S; if (!S || !UI.axis) return;
+        const [p, a] = m.ax, grp = new THREE.Group();
+        const cyl = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 230, 10), new THREE.MeshBasicMaterial({ color: 0x22d3ee }));
+        cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), a.clone().normalize()); cyl.position.copy(p); grp.add(cyl);
+        const disc = new THREE.Mesh(new THREE.RingGeometry(10, 95, 48), new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false }));
+        disc.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), a.clone().normalize()); disc.position.copy(p); grp.add(disc);
+        const M = mats(m.s)[m.as || 'T']; grp.applyMatrix4(M);
+        grp.renderOrder = 5; S.scene.add(grp); helper = grp; S.kick();
+      }
+      function hideAxis() { if (helper && B.S) { B.S.scene.remove(helper); B.S.kick(); } helper = null; }
+
+      // ---------------- state, colours, animation
+      const UI = { axis: true, move: null, pose: {}, anim: 0, hid: [], quiz: null, roleColors: true };
+      function muscleIds() { return B.shown.map(k => ['m_' + k, k]).concat(B.S && B.S.get('ul_bicT') ? [['ul_bicT', 'bicL']] : []); }
+      function paintRoles(m, on) {
+        const S = B.S; if (!S) return;
+        muscleIds().forEach(([id, k]) => {
+          const r = on && m ? roleOf(m, k) : null;
+          S.setColor(id, on && m ? COL[r || 'N'] : (B.sel === k || (id === 'ul_bicT' && B.sel === 'bicS') ? SELC : MUSC));
+          S.glow(id, 0, false);
+        });
+      }
+      function hideLayers(on) {
+        const S = B.S; if (!S) return;
+        if (on) { UI.hid = []; Object.entries(S.objs).forEach(([id, o]) => { if (/^(nv_|ar_|vn_|l_iom|l_(sc|ac|gh)cap|l_cora|l_conoid|l_trapezoid|l_costocl)/.test(id) || (/^ul_/.test(id) && !/^ul_(bicT|scaph|lun|triq|pisi|trpm|trpd|cap|ham|mc|pp|mp|dp)/.test(id))) { if (o.visible) { o.visible = false; UI.hid.push(id); } } }); }
+        else { UI.hid.forEach(id => { const o = S.get(id); if (o) o.visible = true; }); UI.hid = []; }
+        S.kick();
+      }
+      function stop() { if (UI.anim) { UI.anim.dead = true; UI.anim = 0; } }
+      function animate(from, to, ms) {
+        return new Promise(res => {
+          const S = B.S; if (!S) return res(false);
+          const a = { dead: false }; UI.anim = a; const t0 = performance.now();
+          S.loop((now) => {
+            if (a.dead || !B.S) { res(false); return false; }
+            const k = Math.min(1, (now - t0) / ms), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+            UI.pose = lerpPose(from, to, e); applyPose(UI.pose);
+            if (k >= 1) { res(true); return false; } return true;
+          });
+        });
+      }
+      const wait = (ms) => new Promise(r => setTimeout(r, ms));
+      async function play(id, opts) {
+        opts = opts || {}; const m = MV[id]; if (!m || !B.S) return;
+        stop(); UI.move = id; hideLayers(true);
+        await Promise.all(muscleIds().map(([oid, k]) => prep(oid, k)));
+        paintRoles(m, !opts.neutral); showAxis(m); render();
+        if (CAMS[m.cam]) B.S.fly(CAMS[m.cam], 700);
+        if (!(await animate(UI.pose, m.s, 500))) return;
+        for (let i = 0; i < 2; i++) {
+          if (!(await animate(m.s, m.e, 1300))) return; await wait(450); if (UI.move !== id) return;
+          if (i === 0) { if (!(await animate(m.e, m.s, 1000))) return; await wait(250); if (UI.move !== id) return; }
+        }
+        finishGeo();
+      }
+      async function rest(quick) {
+        stop(); hideAxis();
+        if (B.S && Object.keys(UI.pose).length) { if (quick) { UI.pose = {}; applyPose({}); } else await animate(UI.pose, {}, 600); }
+        UI.pose = {}; finishGeo();
+        hideLayers(false); paintRoles(null, false); UI.move = null;
+        if (!quick) render();
+      }
+      // any change to the built muscles goes back to the rest pose first
+      function guard(e) {
+        if (!B.on) return; const t = e.target;
+        if (t.closest('#ulbMove')) return;
+        if (t.closest('#ulbAdd,#ulbUndo,#ulbAll,#ulbReset,#ulbList,#ulbLayers,#ulbNv') && (UI.move || Object.keys(UI.pose).length)) { rest(true); UI.quiz = null; render(); }
+      }
+
+      // ---------------- UI panel
+      function render() {
+        const box = document.getElementById('ulbMove'); if (!box) return;
+        const sel = B.sel, m = UI.move && MV[UI.move];
+        let h = '';
+        // 1) the selected muscle
+        if (sel && !UI.quiz) {
+          const mine = MOVES.filter(x => ['A', 'S'].includes(roleOf(x, sel)));
+          h += `<div class="flex flex-wrap items-center gap-1.5"><span class="text-[12px] font-black text-amber-200">💪 כווץ את <bdi>${esc(name(sel))}</bdi>:</span>`
+            + (mine.length ? mine.map(x => `<button type="button" data-play="${x.id}" class="px-2.5 py-1.5 rounded-xl border-2 text-[12px] font-extrabold ${UI.move === x.id ? 'border-amber-400 bg-amber-500/25 text-amber-100' : 'border-amber-700/60 bg-amber-950/40 text-amber-100'}">▶ ${esc(x.he)}${roleOf(x, sel) === 'S' ? ' <span class="opacity-70">(עוזר)</span>' : ''}</button>`).join('')
+              : '<span class="text-[12px] text-slate-400">לשריר הזה אין תנועה בדגם – הוא בעיקר מייצב.</span>') + '</div>';
+        } else if (!UI.quiz) h += `<div class="text-[12px] text-slate-400">💡 בחר שריר מורכב כדי לכווץ אותו, או בחר תנועה מהרשימה.</div>`;
+        // 2) movement mode
+        if (!UI.quiz) {
+          const groups = [...new Set(MOVES.map(x => x.g))];
+          h += `<details class="mt-2" ${UI.open ? 'open' : ''} data-fold="1"><summary class="cursor-pointer text-[12px] font-black text-cyan-200">🎬 מצב תנועה: בחר תנועה וראה מי עושה אותה</summary><div class="mt-2 space-y-1.5">`
+            + groups.map(g => `<div class="flex flex-wrap gap-1.5 items-center"><span class="text-[11px] font-extrabold text-slate-400 w-20">${esc(g)}</span>${MOVES.filter(x => x.g === g).map(x => `<button type="button" data-play="${x.id}" class="px-2 py-1 rounded-lg border text-[11.5px] font-bold ${UI.move === x.id ? 'border-cyan-400 bg-cyan-500/20 text-cyan-100' : 'border-slate-600 bg-slate-900/60 text-slate-200'}">${esc(x.he)}</button>`).join('')}</div>`).join('')
+            + `</div></details>`;
+        }
+        // 3) controls
+        h += `<div class="flex flex-wrap gap-1.5 mt-2">`
+          + (m && !UI.quiz ? `<button type="button" data-act="again" class="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 text-[12px] font-black">▶ שוב</button>` : '')
+          + (UI.move || UI.quiz ? `<button type="button" data-act="rest" class="px-3 py-1.5 rounded-xl border-2 border-slate-600 text-slate-200 text-[12px] font-extrabold">↺ חזרה למנח המוצא</button>` : '')
+          + `<button type="button" data-act="axis" aria-pressed="${UI.axis}" class="px-3 py-1.5 rounded-xl border-2 text-[12px] font-extrabold ${UI.axis ? 'border-cyan-400 bg-cyan-500/20 text-cyan-100' : 'border-slate-600 text-slate-300'}">📐 ציר ומישור</button>`
+          + `<button type="button" data-act="quiz" class="px-3 py-1.5 rounded-xl border-2 border-fuchsia-500/70 bg-fuchsia-500/15 text-fuchsia-100 text-[12px] font-extrabold">🎯 ${UI.quiz ? 'שאלה אחרת' : 'חידון תנועות'}</button>`
+          + `</div>`;
+        // 4) explanation of the movement / quiz
+        if (UI.quiz) h += quizHtml();
+        else if (m) h += explain(m);
+        box.innerHTML = h;
+      }
+      function legend() {
+        return `<div class="flex flex-wrap gap-2 text-[11px] font-bold mt-1">${['A', 'S', 'X', 'T'].map(r => `<span class="inline-flex items-center gap-1"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgb(${COL[r].map(c => Math.round(c * 255)).join(',')})"></i>${ROLE[r]}</span>`).join('')}</div>`;
+      }
+      function explain(m) {
+        const row = (r) => { const ks = m[r] || []; if (!ks.length) return ''; const on = ks.filter(k => B.shown.includes(k)), off = ks.filter(k => !B.shown.includes(k));
+          return `<li><b style="color:rgb(${COL[r].map(c => Math.round(c * 255)).join(',')})">${ROLE[r]}:</b> ${on.map(k => `<bdi class="text-white font-bold">${esc(name(k))}</bdi>`).join(', ')}${off.length ? `${on.length ? ', ' : ''}<span class="text-slate-500">${off.map(k => `<bdi>${esc(name(k))}</bdi>`).join(', ')} (לא מורכב)</span>` : ''}</li>`; };
+        return `<div class="mt-2 p-3 rounded-xl bg-slate-950/60 border border-cyan-800/50 text-[13px] text-slate-200 leading-relaxed space-y-1">
+          <div class="text-[15px] font-black text-cyan-100">${esc(m.he)}</div>
+          <div>${esc(m.d)}</div>
+          <div class="text-[12px] text-slate-300">🦴 ${esc(m.j)} · 📐 מישור <b>${esc(m.plane)}</b>, סביב ציר <b>${esc(m.axis)}</b></div>
+          <ul class="list-none p-0 m-0 space-y-0.5 text-[12.5px]">${['A', 'S', 'X', 'T'].map(row).join('')}</ul>
+          ${m.note ? `<div class="text-[11.5px] text-slate-400">ℹ️ ${esc(m.note)}</div>` : ''}
+          ${B.shown.length ? legend() : '<div class="text-[11.5px] text-amber-200">כדי לראות את הצבעים על השרירים, הרכב קודם את השרירים שמשתתפים בתנועה.</div>'}</div>`;
+      }
+
+      // ---------------- quiz
+      const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+      function newQuiz() {
+        const withAg = MOVES.filter(m => (m.A || []).some(k => B.shown.includes(k)) && B.shown.filter(k => !['A', 'S'].includes(roleOf(m, k))).length >= 3);
+        let q;
+        if (withAg.length && Math.random() < 0.6) {
+          const m = withAg[Math.floor(Math.random() * withAg.length)];
+          const right = shuffle(m.A.filter(k => B.shown.includes(k)))[0];
+          const wrong = shuffle(B.shown.filter(k => !['A', 'S'].includes(roleOf(m, k)))).slice(0, 3);
+          q = { type: 'ag', m: m.id, ask: 'הדגם מבצע תנועה. איזה מהשרירים המורכבים הוא האגוניסט שלה?', opts: shuffle([right, ...wrong]).map(k => ({ k, t: name(k), ok: k === right })) };
+        } else {
+          const m = MOVES[Math.floor(Math.random() * MOVES.length)];
+          const same = MOVES.filter(x => x.id !== m.id && x.g === m.g), other = MOVES.filter(x => x.id !== m.id && x.g !== m.g);
+          const wrong = shuffle(same).slice(0, 3); while (wrong.length < 3) wrong.push(shuffle(other.filter(x => !wrong.includes(x)))[0]);
+          q = { type: 'mv', m: m.id, ask: 'איזו תנועה הדגם מבצע?', opts: shuffle([m, ...wrong]).map(x => ({ k: x.id, t: x.he, ok: x.id === m.id })) };
+        }
+        UI.quiz = q; q.ans = null;
+        render(); play(q.m, { neutral: true });
+      }
+      function quizHtml() {
+        const q = UI.quiz, m = MV[q.m];
+        return `<div class="mt-2 p-3 rounded-xl bg-fuchsia-950/30 border border-fuchsia-700/50 space-y-2"><div class="text-[14px] font-black text-white">🎯 ${esc(q.ask)}</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">${q.opts.map((o, i) => { const st = q.ans == null ? 'border-slate-600 bg-slate-900/70 text-slate-100' : o.ok ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100' : q.ans === i ? 'border-red-400 bg-red-500/20 text-red-100' : 'border-slate-700 bg-slate-900/40 text-slate-400';
+            return `<button type="button" data-qa="${i}" ${q.ans != null ? 'disabled' : ''} class="px-3 py-2 rounded-xl border-2 text-[13px] font-bold text-start ${st}"><bdi>${esc(o.t)}</bdi></button>`; }).join('')}</div>
+          ${q.ans != null ? `<div class="text-[13px] font-black ${q.opts[q.ans].ok ? 'text-emerald-300' : 'text-red-300'}">${q.opts[q.ans].ok ? '✅ נכון!' : '❌ לא בדיוק.'} ${q.type === 'mv' ? `זו ${esc(m.he)}.` : ''}</div>${explain(m)}` : ''}</div>`;
+      }
+      function answer(i) {
+        const q = UI.quiz; if (!q || q.ans != null) return; q.ans = i;
+        paintRoles(MV[q.m], true); render();
+      }
+
+      // ---------------- wiring into the builder
+      function mount() {
+        const info = document.getElementById('ulbInfo'); if (!info || document.getElementById('ulbMove')) return;
+        const box = document.createElement('div'); box.id = 'ulbMove'; box.className = 'p-3 rounded-xl bg-slate-950/50 border border-amber-800/40';
+        info.parentNode.insertBefore(box, info);
+        box.addEventListener('click', (e) => {
+          const f = e.target.closest('summary'); if (f) { setTimeout(() => { const d = box.querySelector('details'); UI.open = !!(d && d.open); }, 0); return; }
+          const p = e.target.closest('[data-play]'); if (p) { UI.quiz = null; play(p.dataset.play); return; }
+          const a = e.target.closest('[data-act]'); const qa = e.target.closest('[data-qa]');
+          if (qa) { answer(+qa.dataset.qa); return; }
+          if (!a) return;
+          const act = a.dataset.act;
+          if (act === 'again' && UI.move) play(UI.move);
+          else if (act === 'rest') { UI.quiz = null; rest(false); }
+          else if (act === 'axis') { UI.axis = !UI.axis; if (UI.axis && UI.move) showAxis(MV[UI.move]); else hideAxis(); render(); }
+          else if (act === 'quiz') newQuiz();
+        });
+        // re-draw the panel when the selected muscle changes (the builder rewrites its info card)
+        new MutationObserver(() => { if (B.sel !== UI.lastSel) { UI.lastSel = B.sel; if (!UI.quiz) render(); } }).observe(info, { childList: true, subtree: true, characterData: true });
+        const scr = document.getElementById('ulBuild'); if (scr && !scr.dataset.ulmGuard) { scr.dataset.ulmGuard = '1'; scr.addEventListener('click', guard, true); }
+        render();
+      }
+      const _open = UB.open, _close = UB.close;
+      UB.open = async function () {
+        Object.keys(SK).forEach(k => delete SK[k]); Object.assign(UI, { move: null, pose: {}, anim: 0, hid: [], quiz: null, lastSel: null, open: false }); helper = null;
+        const p = _open.apply(this, arguments); setTimeout(mount, 0); const r = await p; mount(); return r;
+      };
+      UB.close = function () { stop(); hideAxis(); Object.keys(SK).forEach(k => delete SK[k]); UI.pose = {}; UI.move = null; UI.quiz = null; return _close.apply(this, arguments); };
+      UB.move = { play, rest, MOVES, UI };
+    })();
     // v4.21: brain for the pathology simulations (Z-Anatomy, CC BY-SA 4.0) + drawn substantia nigra, nigrostriatal and arcuate tracts
     (window.__LAZY = window.__LAZY || {})['BP_PACK'] = 'packs/bp_pack.b60b0b61a2.js';
     window.BP_LINES = {"bp_nsL":[[9.0,0.0,1609.0],[9.8,-0.6,1610.4],[10.5,-1.3,1611.8],[11.3,-1.9,1613.2],[12.1,-2.5,1614.6],[13.0,-3.0,1616.0],[13.9,-3.4,1617.3],[14.9,-3.7,1618.7],[16.0,-4.1,1620.1],[17.0,-4.3,1621.5],[18.0,-4.7,1622.8],[19.0,-5.0,1624.0],[20.1,-5.5,1625.3],[21.0,-6.0,1626.6],[22.0,-6.5,1627.8],[23.0,-7.0,1629.0],[23.0,-7.0,1629.0]],"bp_nsR":[[-9.0,0.0,1609.0],[-9.8,-0.6,1610.4],[-10.5,-1.3,1611.8],[-11.3,-1.9,1613.2],[-12.1,-2.5,1614.6],[-13.0,-3.0,1616.0],[-13.9,-3.4,1617.3],[-14.9,-3.7,1618.7],[-16.0,-4.1,1620.1],[-17.0,-4.3,1621.5],[-18.0,-4.7,1622.8],[-19.0,-5.0,1624.0],[-20.1,-5.5,1625.3],[-21.0,-6.0,1626.6],[-22.0,-6.5,1627.8],[-23.0,-7.0,1629.0],[-23.0,-7.0,1629.0]],"bp_arc":[[56.0,30.0,1618.0],[55.6,30.9,1619.4],[55.2,31.9,1620.8],[54.8,32.9,1622.2],[54.4,34.0,1623.6],[54.0,35.0,1625.0],[53.6,36.0,1626.4],[53.2,36.8,1627.8],[52.8,37.5,1629.2],[52.4,37.9,1630.6],[52.0,38.0,1632.0],[51.6,37.9,1633.4],[51.1,37.5,1634.9],[50.7,36.9,1636.4],[50.3,36.1,1637.9],[49.8,35.2,1639.4],[49.4,34.2,1640.8],[49.0,33.1,1642.2],[48.6,31.9,1643.4],[48.2,30.6,1644.5],[47.8,29.4,1645.4],[47.5,28.1,1646.2],[47.2,26.7,1646.9],[46.9,25.2,1647.5],[46.6,23.7,1648.0],[46.4,22.0,1648.5],[46.1,20.4,1648.9],[45.8,18.7,1649.2],[45.6,17.0,1649.5],[45.4,15.3,1649.7],[45.2,13.6,1649.9],[45.0,12.0,1650.0],[44.8,10.4,1650.0],[44.7,8.7,1650.0],[44.5,7.0,1649.8],[44.4,5.4,1649.6],[44.3,3.7,1649.3],[44.2,2.0,1649.0],[44.1,0.4,1648.6],[44.1,-1.3,1648.2],[44.0,-2.9,1647.8],[44.0,-4.5,1647.4],[44.0,-6.0,1647.0],[44.0,-7.7,1646.5],[44.1,-9.3,1646.0],[44.2,-11.0,1645.5],[44.3,-12.6,1644.9],[44.4,-14.2,1644.4],[44.6,-15.7,1643.8],[44.7,-17.2,1643.2],[44.9,-18.6,1642.6],[45.0,-20.0,1642.0],[45.2,-21.6,1641.3],[45.3,-23.1,1640.6],[45.5,-24.5,1639.8],[45.7,-25.9,1639.1],[45.9,-27.3,1638.4],[46.0,-28.0,1638.0]]};
@@ -19645,7 +19945,7 @@
     // at a safe moment (on the main screen, not in the middle of a game, a duel or an interactive mode).
     // ============================================================================
     (function () {
-      const BUILD = '1795802730';
+      const BUILD = '1795806814';
       window.APP_BUILD = BUILD;
       if (!/^https?:$/.test(location.protocol) || /claude|localhost|127\.0\.0\.1/.test(location.hostname)) return;
       let pending = false;
