@@ -18002,23 +18002,30 @@
           { d: 'ul_armN', he: 'עצבים ביחס להומרוס', ar: 'الأعصاب والعضد' },
           { d: 'ul_spaces', he: 'מעברים בשכמה', ar: 'ممرّات لوح الكتف' },
           { d: 'ul_art', he: 'עורקים', ar: 'الشرايين' },
-          { d: 'ul_vein', he: 'ורידים', ar: 'الأوردة' },
-          { d: 'ul_elbow', he: 'מפרק המרפק', ar: 'مفصل المرفق' },
-          { d: 'ul_ru', he: 'מפרקי ה־Radioulnar', ar: 'المفاصل الكعبرية الزندية' },
-          { d: 'ul_carp', he: 'Carpals', ar: 'عظام الرسغ' },
-          { d: 'ul_hand', he: 'Metacarpals ו־Phalanges', ar: 'الأمشاط والسلاميات' },
-          { d: 'ul_hjoints', he: 'מפרקי כף היד', ar: 'مفاصل اليد' }
+          { d: 'ul_vein', he: 'ורידים', ar: 'الأوردة' }
         ];
+        // v4.23: the elbow, radioulnar and hand stages live in the regular bones mode (limbs), not with nerves and vessels
+        ['ul_elbow', 'ul_ru', 'ul_carp', 'ul_hand', 'ul_hjoints'].forEach(id => { if (VIS_DIAGRAMS[id]) VIS_DIAGRAMS[id].topic = 'limbs'; });
+        const vw = (id) => (VIS_DIAGRAMS[id] && VIS_DIAGRAMS[id].d3 && VIS_DIAGRAMS[id].d3.view) || 'anterior';
+        const at = (VIS_LIMB_GROUPS.findIndex(g => g.id === 'ulna') + 1) || VIS_LIMB_GROUPS.length;
+        VIS_LIMB_GROUPS.splice(at, 0,
+          { id: 'elbow', en: 'Elbow joint', he: 'מפרק המרפק', ar: 'مفصل المرفق', views: [['ul_elbow', vw('ul_elbow')]] },
+          { id: 'radioulnar', en: 'Radioulnar joints', he: 'מפרקי ה־Radioulnar', ar: 'المفاصل الكعبرية الزندية', views: [['ul_ru', vw('ul_ru')]] },
+          { id: 'carpals', en: 'Carpals', he: 'עצמות שורש כף היד', ar: 'عظام الرسغ', views: [['ul_carp', vw('ul_carp')]] },
+          { id: 'hand', en: 'Metacarpals & phalanges', he: 'עצמות כף היד והאצבעות', ar: 'الأمشاط والسلاميات', views: [['ul_hand', vw('ul_hand')]] },
+          { id: 'handjoints', en: 'Hand joints', he: 'מפרקי כף היד', ar: 'مفاصل اليد', views: [['ul_hjoints', vw('ul_hjoints')]] });
+        VIS_LIMB_ORDER.length = 0; VIS_LIMB_GROUPS.forEach(g => g.views.forEach(v => VIS_LIMB_ORDER.push(v[0])));
+        ['anterior', 'posterior', 'lateral', 'medial', 'superior', 'inferior'].forEach(v => { if (!VIS_VIEW_NAMES[v]) VIS_VIEW_NAMES[v] = { he: v[0].toUpperCase() + v.slice(1), ar: v[0].toUpperCase() + v.slice(1) }; });
       } catch (e) { console.warn('ulnv', e); }
       const H = {
-        visSubUlnv: '⚡ עצבים וכלי דם, מרפק ויד', visSubUlnvDesc: 'Brachial plexus, עורקים וורידים, מפרק המרפק וה־Radioulnar, עצמות ומפרקי שורש כף היד והאצבעות',
-        topicUlnvTitle: 'עצבים וכלי דם, מרפק ויד', vexTitleUlnv: '⚡ הגפה העליונה: עצבים, כלי דם, מרפק ויד',
+        visSubUlnv: '⚡ עצבים וכלי דם', visSubUlnvDesc: 'Brachial plexus, הענפים והעצבים של הגפה, מעברים בשכמה, עורקים וורידים',
+        topicUlnvTitle: 'עצבים וכלי דם', vexTitleUlnv: '⚡ הגפה העליונה: עצבים וכלי דם',
         vexHintUlnv: 'צהוב = עצבים, אדום = עורקים, כחול = ורידים. לחץ על מספר או על שם כדי לקרוא על המבנה. גרירה מסובבת את הדגם.',
         visSubUlb: '🧩 בנה את הגפה: שרירים, עצבים וכלי דם', visSubUlbDesc: 'מתחילים מהשלד ומוסיפים שריר אחר שריר; מדליקים ומכבים עצבים, עורקים, ורידים ורצועות'
       };
       const A = {
-        visSubUlnv: '⚡ الأعصاب والأوعية، المرفق واليد', visSubUlnvDesc: 'الضفيرة العضدية، الشرايين والأوردة، مفصل المرفق، عظام ومفاصل الرسغ والأصابع',
-        topicUlnvTitle: 'الأعصاب والأوعية، المرفق واليد', vexTitleUlnv: '⚡ الطرف العلوي: الأعصاب والأوعية والمرفق واليد',
+        visSubUlnv: '⚡ الأعصاب والأوعية', visSubUlnvDesc: 'الضفيرة العضدية، فروع وأعصاب الطرف، ممرّات لوح الكتف، الشرايين والأوردة',
+        topicUlnvTitle: 'الأعصاب والأوعية', vexTitleUlnv: '⚡ الطرف العلوي: الأعصاب والأوعية',
         vexHintUlnv: 'الأصفر = أعصاب، الأحمر = شرايين، الأزرق = أوردة. اضغط على رقم أو اسم لقراءة المعلومات. السحب يدوّر النموذج.',
         visSubUlb: '🧩 ركّب الطرف: عضلات وأعصاب وأوعية', visSubUlbDesc: 'نبدأ بالهيكل ونضيف عضلة بعد عضلة؛ نُظهر الأعصاب والشرايين والأوردة والأربطة'
       };
@@ -19636,7 +19643,7 @@
     // at a safe moment (on the main screen, not in the middle of a game, a duel or an interactive mode).
     // ============================================================================
     (function () {
-      const BUILD = '1795798734';
+      const BUILD = '1795802368';
       window.APP_BUILD = BUILD;
       if (!/^https?:$/.test(location.protocol) || /claude|localhost|127\.0\.0\.1/.test(location.hostname)) return;
       let pending = false;
