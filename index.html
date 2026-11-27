@@ -12036,9 +12036,28 @@
         { d: 'sp_xs', down: null, k: 4, he: 'חתך רוחבי', ar: 'مقطع عرضي' }
       ];
       // v4.22.3: cross-section & tracts hidden until studied (set SP_XS_ON=true to restore)
-      const SP_XS_ON = false;
+      const SP_XS_ON = true;
       // v4.23: the 3D disc (and disc herniation) lives only in the axial skeleton mode
       VIS_CHAINS.spine = VIS_CHAINS.spine.filter(c => c.d !== 'sp_disc'); VIS_CHAINS.spine.forEach(c => { if (c.d === 'sp_lumb') c.down = null; });
+      // v4.23: the cross-section is back with general regions only – the white matter is named by funiculus, without specific tracts
+      (function () {
+        const D = VIS_DIAGRAMS.sp_xs; if (!D) return; const P = D.parts;
+        const hl = (...ks) => ks.map(k => (P[k] && P[k].hl) || '').join('');
+        const VFP = 'M224,70 L252,66 L252,138 L240,146 L230,118 Z M296,70 L268,66 L268,138 L280,146 L290,118 Z';
+        const mk = (en, he, ar, at, dhe, dar, h) => VP(en, he, ar, at, { kind: 'xsw', dhe, dar, hl: h });
+        const dfun = mk('Dorsal funiculus', 'העמוד האחורי (Dorsal funiculus)', 'العمود الخلفي (Dorsal funiculus)', P.grac.at || [234.4, 242.8],
+          'החומר הלבן שבין שתי הקרניים האחוריות. עוברות בו רק מסילות תחושתיות עולות, שמעבירות מידע מהגוף אל המוח.', 'المادة البيضاء بين القرنين الخلفيين. تمرّ فيها مسالك حسية صاعدة فقط تنقل المعلومات من الجسم إلى الدماغ.', hl('grac', 'cun'));
+        const lfun = mk('Lateral funiculus', 'העמוד הצידי (Lateral funiculus)', 'العمود الجانبي (Lateral funiculus)', P.lcst.at || [148.1, 207.3],
+          'החומר הלבן בצד חוט השדרה, בין הקרן הקדמית לאחורית. עוברות בו גם מסילות תחושתיות עולות וגם מסילות מוטוריות יורדות.', 'المادة البيضاء في جانب الحبل الشوكي بين القرنين الأمامي والخلفي. تمرّ فيها مسالك حسية صاعدة ومسالك حركية نازلة.', hl('lcst', 'lst'));
+        const vfun = mk('Ventral funiculus', 'העמוד הקדמי (Ventral funiculus)', 'العمود الأمامي (Ventral funiculus)', [240, 100],
+          'החומר הלבן שבין שתי הקרניים הקדמיות. גם בו עוברות מסילות תחושתיות עולות ומסילות מוטוריות יורדות.', 'المادة البيضاء بين القرنين الأماميين. تمرّ فيها أيضاً مسالك حسية صاعدة ومسالك حركية نازلة.', `<path d="${VFP}" class="vhl"/>`);
+        ['grac', 'cun', 'lcst', 'lst'].forEach(k => delete P[k]);
+        Object.assign(P, { dfun, lfun, vfun }); if (P.wm) P.wm.at = [322, 100];
+        // one colour per funiculus instead of one per tract
+        D.svg = D.svg.replace(/fill="#06b6d4"/g, 'fill="#3b82f6"').replace(/fill="#22c55e"/g, 'fill="#ef4444"').replace(/fill="#fbcfe8"/g, 'fill="#ef4444"').replace(/fill="#bef264"/g, 'fill="#c084fc"').replace(/fill="#fde68a"/g, 'fill="#ef4444"').replace(/fill="#fcd34d"/g, 'fill="#ef4444"')
+          + `<path d="${VFP}" fill="#c084fc" opacity=".75"/>`;
+        D.title = { he: 'חתך רוחבי של חוט השדרה (גובה C6) – חומר אפור, חומר לבן ושורשים', ar: 'مقطع عرضي للحبل الشوكي (مستوى C6) – المادة الرمادية والبيضاء والجذور' };
+      })();
       if (!SP_XS_ON) { VIS_CHAINS.spine = VIS_CHAINS.spine.filter(c => c.d !== 'sp_xs'); VIS_DIAGRAMS.sp_xs.topic = 'spine_off'; }
       VIS_FUNC_Q.push(
         { id: "sf_01", topic: 'spine', d: "sp_over", t: "disc", emoji: "🥯", he: { q: "מאיזה סוג סחוס בנוי המבנה שהחץ מצביע עליו?", options: ["סחוס סיבי (Fibrocartilage)", "סחוס היאליני (Hyaline)", "סחוס אלסטי (Elastic)", "עצם ספוגית"], exp: "הדיסק הבין־חולייתי בנוי מסחוס סיבי, ולכן הוא חזק ובולם זעזועים." }, ar: { q: "من أيّ نوع من الغضروف تتكوّن البنية التي يشير إليها السهم؟", options: ["غضروف ليفي (Fibrocartilage)", "غضروف زجاجي (Hyaline)", "غضروف مرن (Elastic)", "عظم إسفنجي"], exp: "القرص بين الفقرات مبنيّ من غضروف ليفي، لذلك هو قوي ويمتص الصدمات." } },
@@ -12065,6 +12084,11 @@
         { id: "sf_22", topic: 'spine', d: "sp_xs", t: "grac", emoji: "🦶", he: { q: "מאיזה אזור בגוף מגיע המידע במסילה שהחץ מצביע עליה?", options: ["מהגפה התחתונה ומחצי הגוף התחתון", "מהגפה העליונה בלבד", "מהפנים", "מהאיברים הפנימיים בלבד"], exp: "ה־Gracile fasciculus (הפנימי בעמוד האחורי) מעביר מגע עדין ותחושת מנח מהחלק התחתון של הגוף." }, ar: { q: "من أيّ منطقة في الجسم تأتي المعلومات في المسلك الذي يشير إليه السهم؟", options: ["من الطرف السفلي والنصف السفلي للجسم", "من الطرف العلوي فقط", "من الوجه", "من الأعضاء الداخلية فقط"], exp: "الحزمة الناحلة (الداخلية في العمود الخلفي) تنقل اللمس الدقيق وحسّ الوضع من الجزء السفلي من الجسم." } }
       );
       if (!SP_XS_ON) for (let i = VIS_FUNC_Q.length - 1; i >= 0; i--) if (VIS_FUNC_Q[i].d === 'sp_xs') VIS_FUNC_Q.splice(i, 1);
+      // v4.23: no questions on specific tracts – only on the general regions
+      for (let i = VIS_FUNC_Q.length - 1; i >= 0; i--) if (['sf_18', 'sf_19', 'sf_22'].includes(VIS_FUNC_Q[i].id)) VIS_FUNC_Q.splice(i, 1);
+      VIS_FUNC_Q.push(
+        { id: 'sf_23', topic: 'spine', d: 'sp_xs', t: 'dfun', emoji: '⬆️', he: { q: 'אילו מסילות עוברות באזור שהחץ מצביע עליו?', options: ['רק מסילות תחושתיות עולות', 'רק מסילות מוטוריות יורדות', 'גם מסילות תחושתיות עולות וגם מסילות מוטוריות יורדות', 'גופי תא של נוירונים מוטוריים'], exp: 'ב־Dorsal funiculus עוברות רק מסילות תחושתיות עולות.' }, ar: { q: 'أيّ مسالك تمرّ في المنطقة التي يشير إليها السهم؟', options: ['مسالك حسية صاعدة فقط', 'مسالك حركية نازلة فقط', 'مسالك حسية صاعدة ومسالك حركية نازلة معاً', 'أجسام عصبونات حركية'], exp: 'في الـ Dorsal funiculus تمرّ مسالك حسية صاعدة فقط.' } },
+        { id: 'sf_24', topic: 'spine', d: 'sp_xs', t: 'lfun', emoji: '↕️', he: { q: 'אילו מסילות עוברות באזור שהחץ מצביע עליו?', options: ['גם מסילות תחושתיות עולות וגם מסילות מוטוריות יורדות', 'רק מסילות תחושתיות עולות', 'רק מסילות מוטוריות יורדות', 'גופי תא של נוירונים תחושתיים'], exp: 'ב־Lateral funiculus עוברות גם מסילות תחושתיות עולות וגם מסילות מוטוריות יורדות.' }, ar: { q: 'أيّ مسالك تمرّ في المنطقة التي يشير إليها السهم؟', options: ['مسالك حسية صاعدة ومسالك حركية نازلة معاً', 'مسالك حسية صاعدة فقط', 'مسالك حركية نازلة فقط', 'أجسام عصبونات حسية'], exp: 'في الـ Lateral funiculus تمرّ مسالك حسية صاعدة ومسالك حركية نازلة.' } });
       Object.assign(I18N.he, {
         neuroPartLabel: 'בחר נושא:', neuroPartBrain: '🧠 המוח', neuroPartSpine: '🦴 עמוד השדרה וחוט השדרה',
         topicSpineTitle: 'נוירואנטומיה חזותית – עמוד השדרה וחוט השדרה',
@@ -20001,7 +20025,7 @@
     // at a safe moment (on the main screen, not in the middle of a game, a duel or an interactive mode).
     // ============================================================================
     (function () {
-      const BUILD = '1795808868';
+      const BUILD = '1795809802';
       window.APP_BUILD = BUILD;
       if (!/^https?:$/.test(location.protocol) || /claude|localhost|127\.0\.0\.1/.test(location.hostname)) return;
       let pending = false;
