@@ -18431,23 +18431,79 @@
         });
       }
       const wait = (ms) => new Promise(r => setTimeout(r, ms));
+      // camera side of every muscle (so the contracting muscle faces the camera)
+      const SIDE = { subs: 'A', coraco: 'A', bicS: 'A', bicL: 'A', brach: 'A', dC: 'A', pC: 'A', pS: 'A', pA: 'A', subcl: 'A', pmin: 'A', serr: 'L', dA: 'L',
+        supra: 'P', infra: 'P', tmin: 'P', triL: 'P', triLat: 'P', triM: 'P', anc: 'P', dS: 'P', trD: 'P', trT: 'P', trA: 'P', lev: 'P', rhMin: 'P', rhMaj: 'P', lat: 'P', tmaj: 'P' };
+      const VDIR = { shFlex: [-1.05, 0.15], shExt: [-2.1, 0.15], shAbd: [2.75, 0.2], shAdd: [0.25, 0.15], shIR: [0.15, 0.15], shER: [2.5, 0.35], elFlex: [-1.45, 0.1], elExt: [-1.8, 0.1],
+        sup: [-0.7, 0.45], scElev: [2.9, 0.2], scDep: [2.9, 0.2], scRet: [3.0, 0.75], scPro: [-2.2, 0.45], scUp: [2.8, 0.15], scDown: [2.8, 0.15] };
+      // bounding box without stray vertices (3rd–97th percentile on each axis)
+      function robustBox(o) {
+        const p = o.geometry.attributes.position.array, n = p.length / 3, step = Math.max(1, Math.floor(n / 1500)), v = new THREE.Vector3(), xs = [], ys = [], zs = [];
+        for (let i = 0; i < n; i += step) { v.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]).applyMatrix4(o.matrixWorld); xs.push(v.x); ys.push(v.y); zs.push(v.z); }
+        const q = (a, f) => { a.sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.max(0, Math.round(f * (a.length - 1))))]; };
+        return new THREE.Box3(new THREE.Vector3(q(xs, 0.03), q(ys, 0.03), q(zs, 0.03)), new THREE.Vector3(q(xs, 0.97), q(ys, 0.97), q(zs, 0.97)));
+      }
+      function camFor(m, focus) {
+        let [yaw, pitch] = VDIR[m.id] || [0, 0.1];
+        const side = focus && SIDE[focus];
+        const back = Math.abs(yaw) > Math.PI / 2;
+        if (side === 'A' && back) yaw = Math.sign(yaw || 1) * (Math.PI - Math.abs(yaw));
+        if (side === 'P' && !back) yaw = Math.sign(yaw || -1) * (Math.PI - Math.abs(yaw));
+        if (side === 'L') yaw = back ? Math.sign(yaw) * 2.0 : Math.sign(yaw || -1) * 1.2;
+        // frame the muscles with a role (or the moving bones) over the whole movement
+        const box = new THREE.Box3(), S = B.S;
+        const ids = muscleIds().filter(([, k]) => focus ? k === focus : roleOf(m, k)).map(([id]) => id);
+        const segIds = Object.entries(S.objs).filter(([, o]) => SEGB[o.userData.mesh] && o.visible).map(([id]) => id);
+        [m.s, m.e].forEach(q => { applyPose(q);
+          (ids.length ? ids : segIds).forEach(id => { const o = S.get(id); if (!o) return; o.updateMatrixWorld(true); box.union(robustBox(o)); });
+          Object.keys(S.objs).filter(id => /^ul_(dp|mc)/.test(id)).forEach(id => { const o = S.get(id); o.updateMatrixWorld(true); box.union(robustBox(o)); });
+          ['l_humerus', 'mu_radius', 'mu_ulna'].forEach(id => { const o = S.get(id); if (o) { o.updateMatrixWorld(true); const b = o.geometry.boundingBox || (o.geometry.computeBoundingBox(), o.geometry.boundingBox); box.union(b.clone().applyMatrix4(o.matrixWorld)); } });
+        });
+        applyPose(UI.pose);
+        const c = new THREE.Vector3(), sz = new THREE.Vector3(); box.getCenter(c); box.getSize(sz);
+        const r = Math.max(60, sz.length() / 2), aspect = (S.w || 1) / (S.h || 1), half = 15 * Math.PI / 180;
+        const dist = Math.max(320, Math.min(2500, r / Math.sin(half) / Math.min(1, aspect) * 1.0));
+        return { target: c.toArray(), dist, yaw, pitch };
+      }
+      // see-through: the uninvolved muscles and the trunk bones fade, so the working muscles stay in sight
+      function seeThrough(m, on, neutral) {
+        const S = B.S; if (!S) return;
+        if (on) {
+          UI.op = UI.op || {};
+          Object.entries(S.objs).forEach(([id, o]) => {
+            const mk = id.startsWith('m_') ? id.slice(2) : id === 'ul_bicT' ? 'bicL' : null;
+            const seg = SEGB[o.userData.mesh] || /^ul_(scaph|lun|triq|pisi|trpm|trpd|cap|ham|mc|pp|mp|dp)/.test(o.userData.mesh);
+            let a = null;
+            if (mk) { const r = roleOf(m, mk); a = neutral ? 1 : !r ? 0.12 : !UI.focus ? 1 : mk === UI.focus || (UI.focus === 'bicL' && id === 'ul_bicT') ? 1 : r === 'A' ? 0.75 : 0.16; }
+            else if (!seg && o.visible && !UI.hid.includes(id)) a = UI.focus ? 0.12 : 0.22;
+            if (a === null) return;
+            if (!(id in UI.op)) UI.op[id] = o.material.opacity;
+            o.material.opacity = a; o.material.depthWrite = a >= 0.99; o.visible = true;
+          });
+        } else if (UI.op) {
+          Object.entries(UI.op).forEach(([id, a]) => { const o = S.get(id); if (o) { o.material.opacity = a; o.material.depthWrite = a >= 0.99; } });
+          UI.op = null;
+        }
+        S.kick();
+      }
       async function play(id, opts) {
         opts = opts || {}; const m = MV[id]; if (!m || !B.S) return;
-        stop(); UI.move = id; hideLayers(true);
+        stop(); UI.move = id; UI.focus = opts.focus || null; hideLayers(true);
         await Promise.all(muscleIds().map(([oid, k]) => prep(oid, k)));
+        seeThrough(m, false); seeThrough(m, true, !!opts.neutral);
         paintRoles(m, !opts.neutral); showAxis(m); render();
-        if (CAMS[m.cam]) B.S.fly(CAMS[m.cam], 700);
-        if (!(await animate(UI.pose, m.s, 500))) return;
+        B.S.fly(camFor(m, opts.focus), 750);
+        if (!(await animate(UI.pose, m.s, 600))) return;
         for (let i = 0; i < 2; i++) {
-          if (!(await animate(m.s, m.e, 1300))) return; await wait(450); if (UI.move !== id) return;
-          if (i === 0) { if (!(await animate(m.e, m.s, 1000))) return; await wait(250); if (UI.move !== id) return; }
+          if (!(await animate(m.s, m.e, 1400))) return; await wait(500); if (UI.move !== id) return;
+          if (i === 0) { if (!(await animate(m.e, m.s, 1100))) return; await wait(250); if (UI.move !== id) return; }
         }
         finishGeo();
       }
       async function rest(quick) {
         stop(); hideAxis();
         if (B.S && Object.keys(UI.pose).length) { if (quick) { UI.pose = {}; applyPose({}); } else await animate(UI.pose, {}, 600); }
-        UI.pose = {}; finishGeo();
+        UI.pose = {}; finishGeo(); seeThrough(null, false);
         hideLayers(false); paintRoles(null, false); UI.move = null;
         if (!quick) render();
       }
@@ -18467,7 +18523,7 @@
         if (sel && !UI.quiz) {
           const mine = MOVES.filter(x => ['A', 'S'].includes(roleOf(x, sel)));
           h += `<div class="flex flex-wrap items-center gap-1.5"><span class="text-[12px] font-black text-amber-200">💪 כווץ את <bdi>${esc(name(sel))}</bdi>:</span>`
-            + (mine.length ? mine.map(x => `<button type="button" data-play="${x.id}" class="px-2.5 py-1.5 rounded-xl border-2 text-[12px] font-extrabold ${UI.move === x.id ? 'border-amber-400 bg-amber-500/25 text-amber-100' : 'border-amber-700/60 bg-amber-950/40 text-amber-100'}">▶ ${esc(x.he)}${roleOf(x, sel) === 'S' ? ' <span class="opacity-70">(עוזר)</span>' : ''}</button>`).join('')
+            + (mine.length ? mine.map(x => `<button type="button" data-play="${x.id}" data-focus="${sel}" class="px-2.5 py-1.5 rounded-xl border-2 text-[12px] font-extrabold ${UI.move === x.id ? 'border-amber-400 bg-amber-500/25 text-amber-100' : 'border-amber-700/60 bg-amber-950/40 text-amber-100'}">▶ ${esc(x.he)}${roleOf(x, sel) === 'S' ? ' <span class="opacity-70">(עוזר)</span>' : ''}</button>`).join('')
               : '<span class="text-[12px] text-slate-400">לשריר הזה אין תנועה בדגם – הוא בעיקר מייצב.</span>') + '</div>';
         } else if (!UI.quiz) h += `<div class="text-[12px] text-slate-400">💡 בחר שריר מורכב כדי לכווץ אותו, או בחר תנועה מהרשימה.</div>`;
         // 2) movement mode
@@ -18532,7 +18588,7 @@
       }
       function answer(i) {
         const q = UI.quiz; if (!q || q.ans != null) return; q.ans = i;
-        paintRoles(MV[q.m], true); render();
+        paintRoles(MV[q.m], true); seeThrough(MV[q.m], false); seeThrough(MV[q.m], true, false); render();
       }
 
       // ---------------- wiring into the builder
@@ -18542,12 +18598,12 @@
         info.parentNode.insertBefore(box, info);
         box.addEventListener('click', (e) => {
           const f = e.target.closest('summary'); if (f) { setTimeout(() => { const d = box.querySelector('details'); UI.open = !!(d && d.open); }, 0); return; }
-          const p = e.target.closest('[data-play]'); if (p) { UI.quiz = null; play(p.dataset.play); return; }
+          const p = e.target.closest('[data-play]'); if (p) { UI.quiz = null; play(p.dataset.play, { focus: p.dataset.focus || null }); return; }
           const a = e.target.closest('[data-act]'); const qa = e.target.closest('[data-qa]');
           if (qa) { answer(+qa.dataset.qa); return; }
           if (!a) return;
           const act = a.dataset.act;
-          if (act === 'again' && UI.move) play(UI.move);
+          if (act === 'again' && UI.move) play(UI.move, { focus: UI.focus });
           else if (act === 'rest') { UI.quiz = null; rest(false); }
           else if (act === 'axis') { UI.axis = !UI.axis; if (UI.axis && UI.move) showAxis(MV[UI.move]); else hideAxis(); render(); }
           else if (act === 'quiz') newQuiz();
@@ -19945,7 +20001,7 @@
     // at a safe moment (on the main screen, not in the middle of a game, a duel or an interactive mode).
     // ============================================================================
     (function () {
-      const BUILD = '1795807505';
+      const BUILD = '1795808868';
       window.APP_BUILD = BUILD;
       if (!/^https?:$/.test(location.protocol) || /claude|localhost|127\.0\.0\.1/.test(location.hostname)) return;
       let pending = false;
