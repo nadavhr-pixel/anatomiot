@@ -12014,6 +12014,9 @@
         { d: 'sp_nlumb', down: null, he: 'עצבי המותן', ar: 'الأعصاب القطنية' },
         { d: 'sp_xs', down: null, k: 4, he: 'חתך רוחבי', ar: 'مقطع عرضي' }
       ];
+      // v4.22.3: cross-section & tracts hidden until studied (set SP_XS_ON=true to restore)
+      const SP_XS_ON = false;
+      if (!SP_XS_ON) { VIS_CHAINS.spine = VIS_CHAINS.spine.filter(c => c.d !== 'sp_xs'); VIS_DIAGRAMS.sp_xs.topic = 'spine_off'; }
       VIS_FUNC_Q.push(
         { id: "sf_01", topic: 'spine', d: "sp_over", t: "disc", emoji: "🥯", he: { q: "מאיזה סוג סחוס בנוי המבנה שהחץ מצביע עליו?", options: ["סחוס סיבי (Fibrocartilage)", "סחוס היאליני (Hyaline)", "סחוס אלסטי (Elastic)", "עצם ספוגית"], exp: "הדיסק הבין־חולייתי בנוי מסחוס סיבי, ולכן הוא חזק ובולם זעזועים." }, ar: { q: "من أيّ نوع من الغضروف تتكوّن البنية التي يشير إليها السهم؟", options: ["غضروف ليفي (Fibrocartilage)", "غضروف زجاجي (Hyaline)", "غضروف مرن (Elastic)", "عظم إسفنجي"], exp: "القرص بين الفقرات مبنيّ من غضروف ليفي، لذلك هو قوي ويمتص الصدمات." } },
         { id: "sf_02", topic: 'spine', d: "sp_over", t: "cervical", emoji: "🔢", he: { q: "כמה חוליות יש באזור שהחץ מצביע עליו?", options: ["7", "12", "5", "8"], exp: "בצוואר יש 7 חוליות (C1–C7), אבל 8 זוגות של עצבים צוואריים." }, ar: { q: "كم فقرة في المنطقة التي يشير إليها السهم؟", options: ["7", "12", "5", "8"], exp: "في الرقبة 7 فقرات (C1–C7) لكن 8 أزواج من الأعصاب الرقبية." } },
@@ -12038,6 +12041,7 @@
         { id: "sf_21", topic: 'spine', d: "sp_xs", t: "droot", emoji: "📥", he: { q: "מה תפקיד המבנה שהחץ מצביע עליו?", options: ["מכניס מידע תחושתי לחוט השדרה", "מוציא פקודות מוטוריות לשרירים", "מייצר נוזל מוח ושדרה", "מחבר בין שתי ההמיספרות"], exp: "השורש האחורי הוא תחושתי (Afferent), והשורש הקדמי הוא מוטורי (Efferent)." }, ar: { q: "ما وظيفة البنية التي يشير إليها السهم؟", options: ["تُدخل معلومات حسية إلى الحبل الشوكي", "تُخرج أوامر حركية إلى العضلات", "تنتج السائل الدماغي الشوكي", "تصل بين نصفي الكرة"], exp: "الجذر الخلفي حسّي (Afferent) والجذر الأمامي حركي (Efferent)." } },
         { id: "sf_22", topic: 'spine', d: "sp_xs", t: "grac", emoji: "🦶", he: { q: "מאיזה אזור בגוף מגיע המידע במסילה שהחץ מצביע עליה?", options: ["מהגפה התחתונה ומחצי הגוף התחתון", "מהגפה העליונה בלבד", "מהפנים", "מהאיברים הפנימיים בלבד"], exp: "ה־Gracile fasciculus (הפנימי בעמוד האחורי) מעביר מגע עדין ותחושת מנח מהחלק התחתון של הגוף." }, ar: { q: "من أيّ منطقة في الجسم تأتي المعلومات في المسلك الذي يشير إليه السهم؟", options: ["من الطرف السفلي والنصف السفلي للجسم", "من الطرف العلوي فقط", "من الوجه", "من الأعضاء الداخلية فقط"], exp: "الحزمة الناحلة (الداخلية في العمود الخلفي) تنقل اللمس الدقيق وحسّ الوضع من الجزء السفلي من الجسم." } }
       );
+      if (!SP_XS_ON) for (let i = VIS_FUNC_Q.length - 1; i >= 0; i--) if (VIS_FUNC_Q[i].d === 'sp_xs') VIS_FUNC_Q.splice(i, 1);
       Object.assign(I18N.he, {
         neuroPartLabel: 'בחר נושא:', neuroPartBrain: '🧠 המוח', neuroPartSpine: '🦴 עמוד השדרה וחוט השדרה',
         topicSpineTitle: 'נוירואנטומיה חזותית – עמוד השדרה וחוט השדרה',
@@ -19593,7 +19597,7 @@
     // at a safe moment (on the main screen, not in the middle of a game, a duel or an interactive mode).
     // ============================================================================
     (function () {
-      const BUILD = '1795706009';
+      const BUILD = '1795779419';
       window.APP_BUILD = BUILD;
       if (!/^https?:$/.test(location.protocol) || /claude|localhost|127\.0\.0\.1/.test(location.hostname)) return;
       let pending = false;
