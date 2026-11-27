@@ -14146,7 +14146,7 @@
       ['q', 't', 'gm', 'd', 's'].forEach(k => { if (!ST.data[k] || typeof ST.data[k] !== 'object') ST.data[k] = {}; });
       ST.ready = true;
       try { const a = await lbWithTimeout(LB.db.doc('admin/probe').get(), 9000); ST.admin = !!(a && a.exists); } catch (e) { ST.admin = false; }
-      if (ST.admin) { LB.isOwner = true; stAdminButton(); renderLeaderboardTables(); }
+      if (ST.admin) { LB.isOwner = true; stAdminButton(); try { lbHiddenSub(); } catch (e) { } renderLeaderboardTables(); }
     }
     function stBump(obj, key, ok) { const v = Array.isArray(obj[key]) ? obj[key] : [0, 0]; v[0] += 1; if (ok) v[1] += 1; obj[key] = v; }
     function stRecord(ok) {
@@ -19468,6 +19468,7 @@
         return root;
       }
       function open() {
+        if (typeof LB !== 'undefined' && LB.hidden) { try { showToast(ar() ? 'المبارزة غير متاحة لهذا الحساب.' : 'דו־קרב לא זמין בחשבון הזה.', 'info'); } catch (e) { } return; }
         ensureRoot();
         ['lobbyScreen', 'gameScreen', 'summaryScreen', 'resultScreen'].forEach(id => { const e = document.getElementById(id); if (e && !e.classList.contains('hidden')) { e.dataset.duelHid = '1'; e.classList.add('hidden'); } });
         root.classList.remove('hidden'); window.scrollTo(0, 0);
@@ -19605,7 +19606,7 @@
         else if (a === 'copy') { try { navigator.clipboard.writeText(S.code).then(() => showToast(T('הקוד הועתק', 'تم نسخ الرمز'), 'success'), () => { }); } catch (err) { } }
         else if (a === 'again') { stopListen(); Object.assign(S, { code: null, role: null, doc: null, i: 0, mine: [], qs: [], err: '' }); go('home'); }
       }
-      window.Duel = { open, close, S, join };
+      window.Duel = { open, close, S, join: function (c) { if (typeof LB !== 'undefined' && LB.hidden) return; return join.apply(this, arguments); } };
       // after an automatic refresh: open the duel screen and join the same code
       try {
         const rj = JSON.parse(sessionStorage.getItem('duel_rejoin') || 'null');
@@ -19613,12 +19614,29 @@
           if (Date.now() - rj.t < 120000) { const t0 = Date.now(); const tryJoin = () => { if (uid() && document.getElementById('lobbyScreen')) { open(); join(rj.code); } else if (Date.now() - t0 < 15000) setTimeout(tryJoin, 300); }; window.addEventListener('load', () => setTimeout(tryJoin, 600)); } }
       } catch (e) { }
     })();
+
+    // v4.23: hidden players – no class table / rank / duel UI; the admin sees them (🔒) merged into the class table
+    (function () {
+      const st = document.createElement('style');
+      st.textContent = '.lb-hid #lobbyLeaderboardSection,.lb-hid #leaderboardModalBtn,.lb-hid #modalOpenLeaderboardBtn,.lb-hid #hudLiveRankBtn,.lb-hid #modeCardTimed{display:none!important}';
+      document.head.appendChild(st);
+    })();
+    function lbHiddenSub() {
+      if (LB.hunsub || !LB.db || LB.hidden) return;
+      try {
+        LB.hunsub = LB.db.collection('hidden_players').onSnapshot((snap) => {
+          LB.hlist = snap.docs.filter(d => d.exists).map(d => Object.assign(lbNorm(d.data(), d.id), { h: true })).filter(p => p.name);
+          LB.list = (LB.plist || LB.list.filter(p => !p.h)).concat(LB.hlist);
+          renderLeaderboardTables();
+        }, () => { LB.hunsub = null; });
+      } catch (e) { }
+    }
     // ============================================================================
     // v4.21 — automatic update: the site checks now and then whether a newer version was uploaded, and reloads itself
     // at a safe moment (on the main screen, not in the middle of a game, a duel or an interactive mode).
     // ============================================================================
     (function () {
-      const BUILD = '1795784610';
+      const BUILD = '1795798734';
       window.APP_BUILD = BUILD;
       if (!/^https?:$/.test(location.protocol) || /claude|localhost|127\.0\.0\.1/.test(location.hostname)) return;
       let pending = false;
@@ -23835,7 +23853,7 @@
             try { if (user && typeof user.can === 'function' && (await user.can('data.write')) === false) LB.readOnly = true; } catch (_) { }
             LB.pid = id || lbLocalId();
             LB.mode = 'shared';
-            const snap = await lbWithTimeout(db.doc('players/' + LB.pid).get(), 9000);
+            const snap = await lbWithTimeout(db.doc((LB.hidden ? 'hidden_players/' : 'players/') + LB.pid).get(), 9000);
             if (snap && snap.exists) LB.me = lbNorm(snap.data(), LB.pid);
             lbSubscribe();
             return;
@@ -23849,8 +23867,10 @@
           LB.db = fb.db; LB.backend = 'firebase'; LB.mode = 'shared';
           if (fb.uid) {
             LB.pid = fb.uid; LBG.uid = fb.uid; LBG.user = fb.user;
+            try { const hp = await lbWithTimeout(LB.db.doc('hprobe/x').get(), 9000); LB.hidden = !!(hp && hp.exists); } catch (e) { LB.hidden = false; }
+            if (LB.hidden) document.documentElement.classList.add('lb-hid');
             try {
-              const snap = await lbWithTimeout(LB.db.doc('players/' + LB.pid).get(), 9000);
+              const snap = await lbWithTimeout(LB.db.doc((LB.hidden ? 'hidden_players/' : 'players/') + LB.pid).get(), 9000);
               if (snap && snap.exists) { LB.me = lbNorm(snap.data(), LB.pid); LB.me.g = true; }
             } catch (e) { console.warn('player read failed', e); }
             if (!LB.me) {
@@ -23876,12 +23896,14 @@
 
     function lbSubscribe() {
       if (LB.unsub || !LB.db) return;
+      if (LB.hidden) { LB.status = 'live'; LB.list = []; return; }
       LB.status = 'connecting';
       const slow = setTimeout(() => { if (LB.status === 'connecting') { LB.status = 'slow'; renderLeaderboardTables(); } }, 10000);
       LB.unsub = LB.db.collection('players').onSnapshot((snap) => {
         if (!snap.metadata.fromCache) { clearTimeout(slow); if (LB.status === 'connecting' || LB.status === 'slow') LB.status = LB.readOnly ? 'readonly' : 'live'; }
         const before = getPlayerRankInfo(getLeaderboardData(), GameState.playerName, 'total');
-        LB.list = snap.docs.filter(d => d.exists).map(d => lbNorm(d.data(), d.id)).filter(p => p.name && (LB.backend !== 'firebase' || p.g === true));
+        LB.plist = snap.docs.filter(d => d.exists).map(d => lbNorm(d.data(), d.id)).filter(p => p.name && (LB.backend !== 'firebase' || p.g === true));
+        LB.list = LB.plist.concat(LB.hlist || []);
         const own = LB.list.find(p => p.id === LB.pid);
         if (own && !LB.writing && !LB.pending) { LB.me = own; if (own.name && own.name !== GameState.playerName) { GameState.playerName = own.name; updatePlayerBadgeUI(); } }
         renderLeaderboardTables(); updateHudLiveRank();
@@ -23907,7 +23929,7 @@
       LB.pending = false; LB.writing = true;
       try {
         LB.me.updated = new Date().toISOString();
-        await LB.db.doc('players/' + LB.pid).set(lbPlain(LB.me));
+        await LB.db.doc((LB.hidden ? 'hidden_players/' : 'players/') + LB.pid).set(lbPlain(LB.me));
         LB.retried = false;
         if (LB.status === 'error') LB.status = 'live';
       } catch (e) {
@@ -24114,7 +24136,7 @@
             <td class="py-3 px-3 whitespace-nowrap">
               <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-black ${rankBadgeClass}">${emoji ? `<span class="text-base">${emoji}</span>` : ''}<span>#${rank}</span></span>
             </td>
-            <td class="py-3 px-3 font-bold text-white whitespace-nowrap"><span>${visEsc(p.name)}</span>${youTag}${del}</td>
+            <td class="py-3 px-3 font-bold text-white whitespace-nowrap">${p.h ? '<span title="מוסתר">🔒 </span>' : ''}<span>${visEsc(p.name)}</span>${youTag}${del}</td>
             <td class="py-3 px-3 text-center font-mono ${sortKey === 'anatomy' ? 'text-cyan-300 font-black' : 'text-slate-300'}">${pc('anatomy')}${sub('anatomy')}</td>
             <td class="py-3 px-3 text-center font-mono ${sortKey === 'physiology' ? 'text-emerald-300 font-black' : 'text-slate-300'}">${pc('physiology')}${sub('physiology')}</td>
             <td class="py-3 px-3 text-center font-mono ${sortKey === 'neuroanatomy' ? 'text-purple-300 font-black' : 'text-slate-300'}">${pc('neuroanatomy')}${sub('neuroanatomy')}</td>
@@ -24130,7 +24152,7 @@
       ['lbMyStatsLobby', 'lbMyStatsModal'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = status + stats; });
       document.querySelectorAll('.lb-del').forEach(b => b.addEventListener('click', async () => {
         if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = visT('lbDeleteConfirm'); setTimeout(() => { if (b.isConnected) { b.dataset.armed = ''; b.textContent = '🗑'; } }, 3500); return; }
-        try { await LB.db.doc('players/' + b.dataset.del).delete(); } catch (e) { showToast(visT('lbDeleteFail'), 'error'); }
+        try { await LB.db.doc('' + ((LB.list.find(x => x.id === b.dataset.del) || {}).h ? 'hidden_players/' : 'players/') + b.dataset.del).delete(); } catch (e) { showToast(visT('lbDeleteFail'), 'error'); }
       }));
     }
 
