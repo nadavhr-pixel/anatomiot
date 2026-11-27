@@ -12037,6 +12037,8 @@
       ];
       // v4.22.3: cross-section & tracts hidden until studied (set SP_XS_ON=true to restore)
       const SP_XS_ON = false;
+      // v4.23: the 3D disc (and disc herniation) lives only in the axial skeleton mode
+      VIS_CHAINS.spine = VIS_CHAINS.spine.filter(c => c.d !== 'sp_disc'); VIS_CHAINS.spine.forEach(c => { if (c.d === 'sp_lumb') c.down = null; });
       if (!SP_XS_ON) { VIS_CHAINS.spine = VIS_CHAINS.spine.filter(c => c.d !== 'sp_xs'); VIS_DIAGRAMS.sp_xs.topic = 'spine_off'; }
       VIS_FUNC_Q.push(
         { id: "sf_01", topic: 'spine', d: "sp_over", t: "disc", emoji: "🥯", he: { q: "מאיזה סוג סחוס בנוי המבנה שהחץ מצביע עליו?", options: ["סחוס סיבי (Fibrocartilage)", "סחוס היאליני (Hyaline)", "סחוס אלסטי (Elastic)", "עצם ספוגית"], exp: "הדיסק הבין־חולייתי בנוי מסחוס סיבי, ולכן הוא חזק ובולם זעזועים." }, ar: { q: "من أيّ نوع من الغضروف تتكوّن البنية التي يشير إليها السهم؟", options: ["غضروف ليفي (Fibrocartilage)", "غضروف زجاجي (Hyaline)", "غضروف مرن (Elastic)", "عظم إسفنجي"], exp: "القرص بين الفقرات مبنيّ من غضروف ليفي، لذلك هو قوي ويمتص الصدمات." } },
@@ -19643,7 +19645,7 @@
     // at a safe moment (on the main screen, not in the middle of a game, a duel or an interactive mode).
     // ============================================================================
     (function () {
-      const BUILD = '1795802368';
+      const BUILD = '1795802730';
       window.APP_BUILD = BUILD;
       if (!/^https?:$/.test(location.protocol) || /claude|localhost|127\.0\.0\.1/.test(location.hostname)) return;
       let pending = false;
