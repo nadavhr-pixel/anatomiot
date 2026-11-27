@@ -18259,7 +18259,7 @@
         const after = document.getElementById('visSubShqBtn') || document.getElementById('visSubShmusBtn');
         if (after && after.parentNode === sel) { after.after(nb); nb.after(bb); } else { sel.appendChild(nb); sel.appendChild(bb); }
         nb.addEventListener('click', (e) => { e.stopPropagation(); selectTopic('ulnv'); });
-        bb.addEventListener('click', (e) => { e.stopPropagation(); open(); });
+        bb.addEventListener('click', (e) => { e.stopPropagation(); window.ULBuild.open(); });
         const fill = () => { const d = I18N[GameState.lang] || I18N.he; [nb, bb].forEach(b => { const l = document.getElementById(b.id + 'L'), dd = document.getElementById(b.id + 'D'); if (l) l.textContent = d[b.dataset.lk]; if (dd) dd.textContent = d[b.dataset.dk]; }); };
         const _al = applyLanguage; applyLanguage = function () { const r = _al.apply(this, arguments); try { fill(); } catch (e) { } return r; };
         fill(); try { if (window.visGrpPaint) window.visGrpPaint(); } catch (e) { }
@@ -19945,7 +19945,7 @@
     // at a safe moment (on the main screen, not in the middle of a game, a duel or an interactive mode).
     // ============================================================================
     (function () {
-      const BUILD = '1795806814';
+      const BUILD = '1795807505';
       window.APP_BUILD = BUILD;
       if (!/^https?:$/.test(location.protocol) || /claude|localhost|127\.0\.0\.1/.test(location.hostname)) return;
       let pending = false;
